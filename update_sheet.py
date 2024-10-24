@@ -1,5 +1,9 @@
 import arrow
+import requests
+import os
+import json
 import gspread
+import time
 from io import StringIO
 from nba_api.stats import endpoints
 
@@ -11,9 +15,15 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 SPREADSHEET_ID = "1c0939dPegfZ4_x8Oit0l9SWhAthDV5ujuqS6zTiYSYQ"
 RANGE_NAME = "Games!A1:I"
 
-def get_game_stats(player_id, game_id, season="2024-25"):
+def get_game_stats(player_id, game_id, season="2024-25", attempt=1):
     print(player_id, game_id)
-    results = endpoints.CumeStatsPlayer(player_id=int(player_id), game_ids=[game_id], season=season).get_data_frames()
+    try:
+        results = endpoints.CumeStatsPlayer(player_id=int(player_id), game_ids=[game_id], season=season).get_data_frames()
+    except requests.exceptions.ReadTimeout:
+        time.sleep(5)
+        if attempt > 4:
+            raise
+        return get_game_stats(player_id, game_id, season=season, attempt=attempt + 1)
 
     if not len(results[0]):
         return None
@@ -22,7 +32,10 @@ def get_game_stats(player_id, game_id, season="2024-25"):
 
 
 def main():
-    gc = gspread.oauth()
+    if os.environ.get("GOOGLE_CREDENTIALS"):
+        gc = gspread.oauth_from_dict(json.loads(os.environ.get("GOOGLE_CREDENTIALS")))
+    else:
+        gc = gspread.oauth()
     sheet = gc.open_by_key(SPREADSHEET_ID)
     worksheet = sheet.worksheet("Games")
     original_rows = worksheet.get()
@@ -36,10 +49,12 @@ def main():
 
         # print(d)
 
-    rows_to_update = [r for r in rows if arrow.get(r["GAME_DATE_YMD"]) < arrow.utcnow() and not r.get("UPDATED_AT")]
+    rows_to_update = [r for r in rows if arrow.get(r["GAME_DATE_YMD"]) < arrow.utcnow() and arrow.get(r["GAME_DATE_YMD"]) >= arrow.utcnow().shift(days=-1)]
     updated_rows = []
     for row in rows_to_update:
         stats = get_game_stats(row["PLAYER_ID"], row["GAME_ID"], season="2023-24")
+
+        time.sleep(3.5)
         if stats:
             new_row = {**row}
             new_row["POINTS"] = stats["PTS"]
