@@ -7,10 +7,7 @@ import time
 from io import StringIO
 from nba_api.stats import endpoints
 from nba_api.stats.library import http
-
-http.STATS_HEADERS["Referer"] = "https://www.nba.com/"
-http.STATS_HEADERS["Origin"] = "https://www.nba.com"
-
+from fp.fp import FreeProxy
 
 
 # If modifying these scopes, delete the file token.json.
@@ -20,15 +17,15 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 SPREADSHEET_ID = "1c0939dPegfZ4_x8Oit0l9SWhAthDV5ujuqS6zTiYSYQ"
 RANGE_NAME = "Games!A1:I"
 
-def get_game_stats(player_id, game_id, season="2024-25", attempt=1):
+def get_game_stats(player_id, game_id, season="2024-25", proxy=None, attempt=1):
     print(player_id, game_id)
     try:
-        results = endpoints.CumeStatsPlayer(player_id=int(player_id), game_ids=[game_id], season=season).get_data_frames()
+        results = endpoints.CumeStatsPlayer(player_id=int(player_id), game_ids=[game_id], season=season, proxy=proxy).get_data_frames()
     except requests.exceptions.ReadTimeout:
         time.sleep(5)
         if attempt > 4:
             raise
-        return get_game_stats(player_id, game_id, season=season, attempt=attempt + 1)
+        return get_game_stats(player_id, game_id, season=season, proxy=proxy, attempt=attempt + 1)
 
     if not len(results[0]):
         return None
@@ -44,6 +41,7 @@ def main():
         gc = gspread.service_account_from_dict(service_account)
     else:
         gc = gspread.service_account()
+
     sheet = gc.open_by_key(SPREADSHEET_ID)
     worksheet = sheet.worksheet("Games")
     original_rows = worksheet.get()
@@ -55,12 +53,14 @@ def main():
             d[header[i]] = val
         rows.append(d)
 
-        # print(d)
-
     rows_to_update = [r for r in rows if arrow.get(r["GAME_DATE_YMD"]) <= arrow.utcnow() and arrow.get(r["GAME_DATE_YMD"]) >= arrow.utcnow().shift(days=-3)]
     updated_rows = []
+
+    proxy = FreeProxy().get()
+    print(f"Using proxy {proxy}")
+
     for row in rows_to_update:
-        stats = get_game_stats(row["PLAYER_ID"], row["GAME_ID"], season="2023-24")
+        stats = get_game_stats(row["PLAYER_ID"], row["GAME_ID"], season="2023-24", proxy=proxy)
 
         time.sleep(sleep_time)
         if stats:
