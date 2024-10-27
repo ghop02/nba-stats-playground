@@ -35,7 +35,7 @@ def main():
     sleep_time = float(os.environ.get("SLEEP") or 3.5)
     print(f"Sleep time set at {sleep_time}s")
     if os.environ.get("GOOGLE_SERVICE_ACCOUNT"):
-        service_account = json.loads(os.environ.get("GOOGLE_CREDENTIALS"))
+        service_account = json.loads(os.environ.get("GOOGLE_SERVICE_ACCOUNT"))
         gc = gspread.service_account_from_dict(service_account)
     else:
         gc = gspread.service_account()
