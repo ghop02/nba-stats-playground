@@ -34,18 +34,30 @@ def results_to_rows(results):
     return rows
 
 
-def get_game_stats(player_id, game_id, season="2024-25", proxy=None, attempt=1):
+def query_nba_api(player_id, game_id, season="2024-25", proxy=None, attempt=1):
     try:
-        results = endpoints.CumeStatsPlayer(player_id=int(player_id), game_ids=[game_id], season=season, proxy=proxy).get_dict()
+        results = endpoints.CumeStatsPlayer(
+            player_id=int(player_id), game_ids=[game_id], season=season, proxy=proxy
+        ).get_dict()
+        return results
     except requests.exceptions.ReadTimeout:
+        print(f"Request timeout. Sleeping for 5s... attempt={attempt}")
         time.sleep(5)
         if attempt > 4:
             raise
         return get_game_stats(player_id, game_id, season=season, proxy=proxy, attempt=attempt + 1)
+    except json.decoder.JSONDecodeError:
+        print("JSON decoder error")
+        return None
+
+
+def get_game_stats(player_id, game_id, season="2024-25", proxy=None):
+    results = query_nba_api(player_id, game_id, season="2024-25", proxy=None)
+    if not results:
+        return None
 
     results = results['resultSets']
-    if not len(results):
-        return None
+
     rows = results_to_rows(results[0])
     print(rows)
     if not rows:
@@ -84,13 +96,17 @@ def main():
         print(f"Using proxy {proxy}")
 
     for row in rows_to_update:
+        print(f"Updating {row['PLAYER_NAME']}, {row['FORMATTED_GAME']}")
         stats = get_game_stats(row["PLAYER_ID"], row["GAME_ID"], season="2023-24", proxy=proxy)
 
-        time.sleep(sleep_time)
         if stats:
             new_row = {**row}
             new_row["POINTS"] = stats["PTS"]
             updated_rows.append(new_row)
+        else:
+            print("Failed to query API. Continuing...")
+
+        time.sleep(sleep_time)
 
     columns_to_update = ["POINTS"]
     for i, row in enumerate(rows):
