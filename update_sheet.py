@@ -88,7 +88,7 @@ def _update_row(worksheet, header, rows, row_to_update):
 
 
 def main():
-    sleep_time = float(os.environ.get("SLEEP") or 3.5)
+    sleep_time = float(os.environ.get("SLEEP") or 2.5)
     print(f"Sleep time set at {sleep_time}s")
     if os.environ.get("GOOGLE_SERVICE_ACCOUNT"):
         service_account = json.loads(os.environ.get("GOOGLE_SERVICE_ACCOUNT"))
@@ -153,11 +153,15 @@ def main():
             new_row = {**row}
             new_row["POINTS"] = 0
             new_row["UPDATED_AT"] = str(arrow.utcnow())
+            updated_rows.append(new_row)
             _update_row(worksheet, header, rows, new_row)
         else:
-            print("Failed to query API. Continuing...")
+            print("No results returned. Continuing...")
 
         time.sleep(sleep_time)
+
+    print(f"Updated {len(updated_rows)}/{len(rows_to_update)} rows")
+
 
 if __name__ == "__main__":
     main()
