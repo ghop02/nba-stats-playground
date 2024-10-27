@@ -29,4 +29,8 @@ jobs:
       - name: execute py script # run main.py
         env:
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-        run: python update_sheet.py
+        run: |
+          mkdir -p ~/.config/gspread/
+
+          echo $GOOGLE_CREDENTIALS > ~/.config/gspread/credentials.json
+          python update_sheet.py

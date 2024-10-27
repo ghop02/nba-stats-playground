@@ -32,7 +32,7 @@ def get_game_stats(player_id, game_id, season="2024-25", attempt=1):
 
 
 def main():
-    if os.environ.get("GOOGLE_CREDENTIALS"):
+    if os.environ.get("GOOGLE_CREDENTIALS") and False:
         gc = gspread.oauth_from_dict(json.loads(os.environ.get("GOOGLE_CREDENTIALS")))
     else:
         gc = gspread.oauth()
@@ -49,7 +49,7 @@ def main():
 
         # print(d)
 
-    rows_to_update = [r for r in rows if arrow.get(r["GAME_DATE_YMD"]) < arrow.utcnow() and arrow.get(r["GAME_DATE_YMD"]) >= arrow.utcnow().shift(days=-1)]
+    rows_to_update = [r for r in rows if arrow.get(r["GAME_DATE_YMD"]) <= arrow.utcnow() and arrow.get(r["GAME_DATE_YMD"]) >= arrow.utcnow().shift(days=-3)]
     updated_rows = []
     for row in rows_to_update:
         stats = get_game_stats(row["PLAYER_ID"], row["GAME_ID"], season="2023-24")
