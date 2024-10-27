@@ -17,12 +17,6 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 SPREADSHEET_ID = "1c0939dPegfZ4_x8Oit0l9SWhAthDV5ujuqS6zTiYSYQ"
 RANGE_NAME = "Games!A1:I"
 
-class GetProxy:
-
-    def __init__(self):
-        self.active_proxy = None
-
-
 
 def results_to_rows(results):
     rows = []
@@ -71,12 +65,26 @@ def get_game_stats(player_id, game_id, season="2024-25", proxy=None):
     results = results['resultSets']
 
     rows = results_to_rows(results[0])
-    print(rows)
     if not rows:
         return None
     return rows[0]
 
     # return results[0].to_dict('records')[0]
+
+def _update_row(worksheet, header, rows, row_to_update):
+    print("Updating Google Sheet row")
+    columns_to_update = ["POINTS", "UPDATED_AT"]
+    for i, row in enumerate(rows):
+        should_update = (
+            row_to_update["PLAYER_ID"] == row["PLAYER_ID"] 
+            and row_to_update["GAME_ID"] == row["GAME_ID"]
+        )
+        if not should_update:
+            continue
+
+        for col in columns_to_update:
+            j = header.index(col)
+            worksheet.update_cell(i+2, j+1, row_to_update[col])
 
 
 def main():
@@ -99,7 +107,27 @@ def main():
             d[header[i]] = val
         rows.append(d)
 
-    rows_to_update = [r for r in rows if arrow.get(r["GAME_DATE_YMD"]) <= arrow.utcnow() and arrow.get(r["GAME_DATE_YMD"]) >= arrow.utcnow().shift(days=-3)]
+    rows_to_update = []
+    for row in rows:
+        game_time = arrow.get(f"{row['GAME_DATE_YMD']} {row['GAME_TIME']}", "YYYY-MM-DD h:mm A").replace(tzinfo='US/Eastern')
+        now = arrow.utcnow()
+        updated_at = None
+
+        try:
+            updated_at = arrow.get(row.get("UPDATED_AT"))
+        except:
+            pass
+
+        if updated_at and updated_at > game_time.shift(hours=6):
+            # Stop updating rows 6 hours after the game
+            continue
+
+        if game_time > now:
+            # Don't update games that haven't started yet
+            continue
+
+        rows_to_update.append(row)
+
     updated_rows = []
 
     proxy = None
@@ -107,31 +135,29 @@ def main():
         proxy = FreeProxy(https=True).get()
         print(f"Using proxy {proxy}")
 
+    print(f"Updating {len(rows_to_update)} rows")
     for row in rows_to_update:
-        print(f"Updating {row['PLAYER_NAME']}, {row['FORMATTED_GAME']}")
+        game = f"{row['PLAYER_NAME']}, {row['FORMATTED_GAME']}"
+        print(f"Updating {game}")
         stats = get_game_stats(row["PLAYER_ID"], row["GAME_ID"], season="2023-24", proxy=proxy)
-
+        game_time = arrow.get(f"{row['GAME_DATE_YMD']} {row['GAME_TIME']}", "YYYY-MM-DD h:mm A").replace(tzinfo='US/Eastern')
         if stats:
             new_row = {**row}
             new_row["POINTS"] = stats["PTS"]
+            new_row["UPDATED_AT"] = str(arrow.utcnow())
             updated_rows.append(new_row)
+            _update_row(worksheet, header, rows, new_row)
+        elif game_time < arrow.utcnow().shift(days=-1):
+            print("No results for a game over a day ago, counting as 0")
+            # Games that don't return any results and were over a day ago we assume that they did not play
+            new_row = {**row}
+            new_row["POINTS"] = 0
+            new_row["UPDATED_AT"] = str(arrow.utcnow())
+            _update_row(worksheet, header, rows, new_row)
         else:
             print("Failed to query API. Continuing...")
 
         time.sleep(sleep_time)
-
-    columns_to_update = ["POINTS"]
-    for i, row in enumerate(rows):
-        found_rows = [r for r in updated_rows if r["PLAYER_ID"] == row["PLAYER_ID"] and r["GAME_ID"] == row["GAME_ID"]]
-        if found_rows and len(found_rows) > 1:
-            raise ValueError("Duplicate rows!!")
-        elif not found_rows:
-            continue
-
-        found_row = found_rows[0]
-        for col in columns_to_update:
-            j = header.index(col)
-            worksheet.update_cell(i+2, j+1, found_row[col])
 
 if __name__ == "__main__":
     main()
