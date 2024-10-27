@@ -1,21 +1,20 @@
-import arrow
-import requests
-import os
 import json
-import gspread
+import os
 import time
-from io import StringIO
+
+import arrow
+import gspread
+import requests
+
 from nba_api.stats import endpoints
 from nba_api.stats.library import http
 from fp.fp import FreeProxy
+
 USE_PROXY = True
 RANDOMIZE_PROXY = True
-# If modifying these scopes, delete the file token.json.
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
 # The ID and range of a sample spreadsheet.
 SPREADSHEET_ID = "1c0939dPegfZ4_x8Oit0l9SWhAthDV5ujuqS6zTiYSYQ"
-RANGE_NAME = "Games!A1:I"
 
 
 def results_to_rows(results):
@@ -37,7 +36,7 @@ def query_nba_api(player_id, game_id, season="2024-25", proxy=None, attempt=1):
     except requests.exceptions.ReadTimeout:
         print(f"Request timeout. Sleeping for 5s... attempt={attempt}")
         if proxy and RANDOMIZE_PROXY:
-            proxy = FreeProxy(https=True, random=True).get()
+            proxy = FreeProxy(https=True, rand=True).get()
             print(f"Chose new proxy: {proxy}")
 
         time.sleep(5)
@@ -45,6 +44,8 @@ def query_nba_api(player_id, game_id, season="2024-25", proxy=None, attempt=1):
             raise
         return query_nba_api(player_id, game_id, season=season, proxy=proxy, attempt=attempt + 1)
     except json.decoder.JSONDecodeError:
+        # This likely means there are just no results for that player. Either they missed the game
+        # or the game doesn't have any results yet.
         print("JSON decoder error")
         return None
     except requests.exceptions.ProxyError:
@@ -56,6 +57,7 @@ def query_nba_api(player_id, game_id, season="2024-25", proxy=None, attempt=1):
         if attempt > 4:
             raise
         return query_nba_api(player_id, game_id, season=season, proxy=proxy, attempt=attempt + 1)
+
 
 def get_game_stats(player_id, game_id, season="2024-25", proxy=None):
     results = query_nba_api(player_id, game_id, season="2024-25", proxy=proxy)
@@ -69,7 +71,6 @@ def get_game_stats(player_id, game_id, season="2024-25", proxy=None):
         return None
     return rows[0]
 
-    # return results[0].to_dict('records')[0]
 
 def _update_row(worksheet, header, rows, row_to_update):
     print("Updating Google Sheet row")
@@ -144,6 +145,7 @@ def main():
     worksheet = sheet.worksheet("Games")
     original_rows = worksheet.get()
     header = original_rows[0]
+
     rows = []
     for row in original_rows[1:]:
         d = {}
