@@ -9,7 +9,7 @@ from nba_api.stats import endpoints
 from nba_api.stats.library import http
 from fp.fp import FreeProxy
 USE_PROXY = True
-
+RANDOMIZE_PROXY = True
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 
@@ -42,10 +42,14 @@ def query_nba_api(player_id, game_id, season="2024-25", proxy=None, attempt=1):
         return results
     except requests.exceptions.ReadTimeout:
         print(f"Request timeout. Sleeping for 5s... attempt={attempt}")
+        if proxy and RANDOMIZE_PROXY:
+            proxy = FreeProxy(https=True, random=True).get()
+            print(f"Chose new proxy: {proxy}")
+
         time.sleep(5)
         if attempt > 4:
             raise
-        return get_game_stats(player_id, game_id, season=season, proxy=proxy, attempt=attempt + 1)
+        return query_nba_api(player_id, game_id, season=season, proxy=proxy, attempt=attempt + 1)
     except json.decoder.JSONDecodeError:
         print("JSON decoder error")
         return None
