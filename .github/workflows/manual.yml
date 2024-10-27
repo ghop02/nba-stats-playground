@@ -28,6 +28,7 @@ jobs:
       - name: execute py script # run main.py
         env:
           GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
         run: |
           mkdir -p ~/.config/gspread/
 
