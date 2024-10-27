@@ -6,6 +6,11 @@ import gspread
 import time
 from io import StringIO
 from nba_api.stats import endpoints
+from nba_api.stats.library import http
+
+http.STATS_HEADERS["Referer"] = "https://www.nba.com/"
+http.STATS_HEADERS["Origin"] = "https://www.nba.com"
+
 
 
 # If modifying these scopes, delete the file token.json.
