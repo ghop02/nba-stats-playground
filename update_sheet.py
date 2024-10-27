@@ -34,7 +34,11 @@ def get_game_stats(player_id, game_id, season="2024-25", attempt=1):
 def main():
     sleep_time = float(os.environ.get("SLEEP") or 3.5)
     print(f"Sleep time set at {sleep_time}s")
-    gc = gspread.service_account()
+    if os.environ.get("GOOGLE_SERVICE_ACCOUNT"):
+        service_account = json.loads(os.environ.get("GOOGLE_CREDENTIALS"))
+        gc = gspread.service_account_from_dict(service_account)
+    else:
+        gc = gspread.service_account()
     sheet = gc.open_by_key(SPREADSHEET_ID)
     worksheet = sheet.worksheet("Games")
     original_rows = worksheet.get()
