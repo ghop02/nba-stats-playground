@@ -56,7 +56,7 @@ def main():
     rows_to_update = [r for r in rows if arrow.get(r["GAME_DATE_YMD"]) <= arrow.utcnow() and arrow.get(r["GAME_DATE_YMD"]) >= arrow.utcnow().shift(days=-3)]
     updated_rows = []
 
-    proxy = FreeProxy().get()
+    proxy = FreeProxy(https=True).get()
     print(f"Using proxy {proxy}")
 
     for row in rows_to_update:
