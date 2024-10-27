@@ -87,6 +87,50 @@ def _update_row(worksheet, header, rows, row_to_update):
             worksheet.update_cell(i+2, j+1, row_to_update[col])
 
 
+def should_update_row(row):
+    game_time = arrow.get(f"{row['GAME_DATE_YMD']} {row['GAME_TIME']}", "YYYY-MM-DD h:mm A").replace(tzinfo='US/Eastern')
+    now = arrow.utcnow()
+    updated_at = None
+
+    try:
+        updated_at = arrow.get(row.get("UPDATED_AT"))
+    except:
+        pass
+
+    if updated_at and updated_at > game_time.shift(hours=6):
+        # Stop updating rows 6 hours after the game
+        return False
+
+    if game_time > now:
+        # Don't update games that haven't started yet
+        return False
+
+    return True
+
+def get_updated_rows(rows_to_update, sleep_time=2.5, proxy=None):
+    for row in rows_to_update:
+        game = f"{row['PLAYER_NAME']}, {row['FORMATTED_GAME']}"
+        print(f"Updating {game}")
+        stats = get_game_stats(row["PLAYER_ID"], row["GAME_ID"], season="2023-24", proxy=proxy)
+        game_time = arrow.get(f"{row['GAME_DATE_YMD']} {row['GAME_TIME']}", "YYYY-MM-DD h:mm A").replace(tzinfo='US/Eastern')
+        if stats:
+            new_row = {**row}
+            new_row["POINTS"] = stats["PTS"]
+            new_row["UPDATED_AT"] = str(arrow.utcnow())
+            yield new_row
+        elif game_time < arrow.utcnow().shift(days=-1):
+            print("No results for a game over a day ago, counting as 0")
+            # Games that don't return any results and were over a day ago we assume that they did not play
+            new_row = {**row}
+            new_row["POINTS"] = 0
+            new_row["UPDATED_AT"] = str(arrow.utcnow())
+            yield new_row
+        else:
+            print("No results returned. Continuing...")
+
+        time.sleep(sleep_time)
+
+
 def main():
     sleep_time = float(os.environ.get("SLEEP") or 2.5)
     print(f"Sleep time set at {sleep_time}s")
@@ -107,60 +151,19 @@ def main():
             d[header[i]] = val
         rows.append(d)
 
-    rows_to_update = []
-    for row in rows:
-        game_time = arrow.get(f"{row['GAME_DATE_YMD']} {row['GAME_TIME']}", "YYYY-MM-DD h:mm A").replace(tzinfo='US/Eastern')
-        now = arrow.utcnow()
-        updated_at = None
-
-        try:
-            updated_at = arrow.get(row.get("UPDATED_AT"))
-        except:
-            pass
-
-        if updated_at and updated_at > game_time.shift(hours=6):
-            # Stop updating rows 6 hours after the game
-            continue
-
-        if game_time > now:
-            # Don't update games that haven't started yet
-            continue
-
-        rows_to_update.append(row)
-
-    updated_rows = []
-
     proxy = None
     if USE_PROXY:
         proxy = FreeProxy(https=True).get()
         print(f"Using proxy {proxy}")
 
-    print(f"Updating {len(rows_to_update)} rows")
-    for row in rows_to_update:
-        game = f"{row['PLAYER_NAME']}, {row['FORMATTED_GAME']}"
-        print(f"Updating {game}")
-        stats = get_game_stats(row["PLAYER_ID"], row["GAME_ID"], season="2023-24", proxy=proxy)
-        game_time = arrow.get(f"{row['GAME_DATE_YMD']} {row['GAME_TIME']}", "YYYY-MM-DD h:mm A").replace(tzinfo='US/Eastern')
-        if stats:
-            new_row = {**row}
-            new_row["POINTS"] = stats["PTS"]
-            new_row["UPDATED_AT"] = str(arrow.utcnow())
-            updated_rows.append(new_row)
-            _update_row(worksheet, header, rows, new_row)
-        elif game_time < arrow.utcnow().shift(days=-1):
-            print("No results for a game over a day ago, counting as 0")
-            # Games that don't return any results and were over a day ago we assume that they did not play
-            new_row = {**row}
-            new_row["POINTS"] = 0
-            new_row["UPDATED_AT"] = str(arrow.utcnow())
-            updated_rows.append(new_row)
-            _update_row(worksheet, header, rows, new_row)
-        else:
-            print("No results returned. Continuing...")
+    rows_to_update = [row for row in rows if should_update_row(row)]
+    updated_rows = get_updated_rows(rows_to_update, sleep_time=sleep_time, proxy=proxy)
+    total_updates = 0
+    for updated_row in updated_rows:
+        _update_row(worksheet, header, rows, updated_row)
+        total_updates += 1
 
-        time.sleep(sleep_time)
-
-    print(f"Updated {len(updated_rows)}/{len(rows_to_update)} rows")
+    print(f"Updated {total_updates}/{len(rows_to_update)} rows")
 
 
 if __name__ == "__main__":
