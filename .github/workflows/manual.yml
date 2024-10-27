@@ -32,5 +32,5 @@ jobs:
         run: |
           mkdir -p ~/.config/gspread/
 
-          echo $GOOGLE_CREDENTIALS > ~/.config/gspread/credentials.json
+          echo $GOOGLE_SERVICE_ACCOUNT > ~/.config/gspread/service_account.json
           python update_sheet.py

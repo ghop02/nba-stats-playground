@@ -32,10 +32,9 @@ def get_game_stats(player_id, game_id, season="2024-25", attempt=1):
 
 
 def main():
-    if os.environ.get("GOOGLE_CREDENTIALS") and False:
-        gc = gspread.oauth_from_dict(json.loads(os.environ.get("GOOGLE_CREDENTIALS")))
-    else:
-        gc = gspread.oauth()
+    sleep_time = float(os.environ.get("SLEEP") or 3.5)
+    print(f"Sleep time set at {sleep_time}s")
+    gc = gspread.service_account()
     sheet = gc.open_by_key(SPREADSHEET_ID)
     worksheet = sheet.worksheet("Games")
     original_rows = worksheet.get()
@@ -54,7 +53,7 @@ def main():
     for row in rows_to_update:
         stats = get_game_stats(row["PLAYER_ID"], row["GAME_ID"], season="2023-24")
 
-        time.sleep(3.5)
+        time.sleep(sleep_time)
         if stats:
             new_row = {**row}
             new_row["POINTS"] = stats["PTS"]
