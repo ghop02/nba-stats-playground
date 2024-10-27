@@ -8,7 +8,7 @@ from io import StringIO
 from nba_api.stats import endpoints
 from nba_api.stats.library import http
 from fp.fp import FreeProxy
-
+USE_PROXY = True
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
@@ -17,20 +17,42 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
 SPREADSHEET_ID = "1c0939dPegfZ4_x8Oit0l9SWhAthDV5ujuqS6zTiYSYQ"
 RANGE_NAME = "Games!A1:I"
 
+class GetProxy:
+
+    def __init__(self):
+        self.active_proxy = None
+
+
+
+def results_to_rows(results):
+    rows = []
+    for row in results['rowSet']:
+        d = {}
+        for i, v in enumerate(row):
+            d[results['headers'][i]] = v
+        rows.append(d)
+    return rows
+
+
 def get_game_stats(player_id, game_id, season="2024-25", proxy=None, attempt=1):
-    print(player_id, game_id)
     try:
-        results = endpoints.CumeStatsPlayer(player_id=int(player_id), game_ids=[game_id], season=season, proxy=proxy).get_data_frames()
+        results = endpoints.CumeStatsPlayer(player_id=int(player_id), game_ids=[game_id], season=season, proxy=proxy).get_dict()
     except requests.exceptions.ReadTimeout:
         time.sleep(5)
         if attempt > 4:
             raise
         return get_game_stats(player_id, game_id, season=season, proxy=proxy, attempt=attempt + 1)
 
-    if not len(results[0]):
+    results = results['resultSets']
+    if not len(results):
         return None
-    
-    return results[0].to_dict('records')[0]
+    rows = results_to_rows(results[0])
+    print(rows)
+    if not rows:
+        return None
+    return rows[0]
+
+    # return results[0].to_dict('records')[0]
 
 
 def main():
@@ -56,8 +78,10 @@ def main():
     rows_to_update = [r for r in rows if arrow.get(r["GAME_DATE_YMD"]) <= arrow.utcnow() and arrow.get(r["GAME_DATE_YMD"]) >= arrow.utcnow().shift(days=-3)]
     updated_rows = []
 
-    proxy = FreeProxy(https=True).get()
-    print(f"Using proxy {proxy}")
+    proxy = None
+    if USE_PROXY:
+        proxy = FreeProxy(https=True).get()
+        print(f"Using proxy {proxy}")
 
     for row in rows_to_update:
         stats = get_game_stats(row["PLAYER_ID"], row["GAME_ID"], season="2023-24", proxy=proxy)
