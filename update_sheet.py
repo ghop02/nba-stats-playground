@@ -48,7 +48,7 @@ def query_nba_api(player_id, game_id, season="2024-25", proxy=None, attempt=1):
         # or the game doesn't have any results yet.
         print("JSON decoder error")
         return None
-    except requests.exceptions.ProxyError:
+    except (requests.exceptions.SSLError, requests.exceptions.ProxyError):
         print(f"Proxy failure. trying a different one (attempt={attempt})")
         if proxy and RANDOMIZE_PROXY:
             proxy = FreeProxy(https=True, rand=True).get()
